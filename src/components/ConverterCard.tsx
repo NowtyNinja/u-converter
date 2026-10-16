@@ -13,7 +13,9 @@ import {
   ZoomIn,
   ZoomOut,
   BookOpen,
-  Lightbulb
+  Lightbulb,
+  Mic,
+  MicOff
 } from 'lucide-react';
 import {
   ConversionDirection,
@@ -25,6 +27,7 @@ import { exportToDocx, exportToTxt } from '../utils/docxExport';
 import { Language, translations } from '../utils/translations';
 import { LivePreviewBox } from './LivePreviewBox';
 import { SinglishGuideModal } from './SinglishGuideModal';
+import { useSpeechToText } from '../hooks/useSpeechToText';
 
 interface ConverterCardProps {
   lang: Language;
@@ -41,6 +44,19 @@ export const ConverterCard: React.FC<ConverterCardProps> = ({ lang }) => {
   
   // Font size control for textareas (default 18px for high Sinhala legibility)
   const [editorFontSize, setEditorFontSize] = useState<number>(18);
+
+  // Speech-to-Text Voice Typing integration
+  const handleVoiceTranscript = (transcript: string) => {
+    setInputText((prev) => (prev ? prev + ' ' + transcript : transcript));
+  };
+
+  const {
+    isListening,
+    interimText,
+    errorMessage: speechError,
+    startListening,
+    stopListening,
+  } = useSpeechToText(handleVoiceTranscript);
 
   const t = translations[lang];
 
@@ -242,6 +258,36 @@ export const ConverterCard: React.FC<ConverterCardProps> = ({ lang }) => {
 
             {/* Quick Actions */}
             <div className="flex items-center gap-2">
+              {/* Voice Typing Button */}
+              <button
+                onClick={() => {
+                  if (isListening) {
+                    stopListening();
+                  } else {
+                    const langCode = direction === 'singlish_to_unicode' ? 'en-US' : 'si-LK';
+                    startListening(langCode);
+                  }
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-sm ${
+                  isListening
+                    ? 'bg-rose-600 text-white animate-pulse ring-2 ring-rose-400'
+                    : 'text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
+                }`}
+                title={lang === 'si' ? 'හඬින් ටයිප් කරන්න (Voice Typing)' : 'Voice Typing'}
+              >
+                {isListening ? (
+                  <>
+                    <MicOff className="w-4 h-4 text-white" />
+                    <span>{lang === 'si' ? 'සවන් දෙමින්... (Stop)' : 'Listening... (Stop)'}</span>
+                  </>
+                ) : (
+                  <>
+                    <Mic className="w-4 h-4 text-rose-500" />
+                    <span>{lang === 'si' ? 'හඬින් ටයිප් කරන්න' : 'Voice Typing'}</span>
+                  </>
+                )}
+              </button>
+
               <button
                 onClick={handlePaste}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 transition shadow-sm"
@@ -260,6 +306,28 @@ export const ConverterCard: React.FC<ConverterCardProps> = ({ lang }) => {
               </button>
             </div>
           </div>
+
+          {/* Active Voice Listening Live Banner */}
+          {isListening && (
+            <div className="mx-4 mt-3 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/60 border-2 border-rose-300 dark:border-rose-800 text-xs flex flex-wrap items-center justify-between gap-2 shadow-sm animate-in fade-in">
+              <div className="flex items-center gap-2 text-rose-800 dark:text-rose-200 font-extrabold">
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-600 animate-ping"></span>
+                <span>{lang === 'si' ? 'සිංහලෙන් කථා කරන්න (Speak in Sinhala)...' : 'Listening (Speak now)...'}</span>
+              </div>
+              {interimText && (
+                <span className="italic text-slate-800 dark:text-slate-200 font-bold bg-white dark:bg-slate-900 px-2 py-0.5 rounded border border-rose-200">
+                  "{interimText}"
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Speech Error Banner */}
+          {speechError && (
+            <div className="mx-4 mt-3 p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-200 font-medium">
+              ⚠️ {speechError}
+            </div>
+          )}
 
           {/* Quick Helper Banner for Singlish */}
           {direction === 'singlish_to_unicode' && (
