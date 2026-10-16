@@ -13,9 +13,8 @@ export const App: React.FC = () => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('u_converter_theme');
       if (saved) return saved === 'dark';
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
     }
-    return false;
+    return false; // Default strictly to Light Mode
   });
 
   useEffect(() => {
