@@ -4,7 +4,11 @@ import { unicodeToDlManel } from './unicodeToDl';
 import { dlManelToUnicode } from './dlToUnicode';
 import { singlishToUnicode } from './singlishToUnicode';
 
-export type ConversionDirection = 'unicode_to_legacy' | 'legacy_to_unicode' | 'singlish_to_unicode';
+export type ConversionDirection =
+  | 'unicode_to_legacy'
+  | 'legacy_to_unicode'
+  | 'singlish_to_unicode'
+  | 'voice_to_unicode';
 
 export type TargetFont = 'fm-abhaya' | 'fm-derana' | 'dl-manel' | 'wijeya';
 
@@ -63,7 +67,7 @@ export function convertText(
     return singlishToUnicode(inputText);
   }
 
-  if (direction === 'unicode_to_legacy') {
+  if (direction === 'unicode_to_legacy' || direction === 'voice_to_unicode') {
     switch (targetFont) {
       case 'dl-manel':
         return unicodeToDlManel(inputText);

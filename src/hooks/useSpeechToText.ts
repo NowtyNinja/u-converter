@@ -44,6 +44,8 @@ export function useSpeechToText(onFinalTranscript: (text: string) => void) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const isExplicitListeningRef = useRef<boolean>(false);
+  const activeLangRef = useRef<string>('si-LK');
   const onFinalTranscriptRef = useRef(onFinalTranscript);
   onFinalTranscriptRef.current = onFinalTranscript;
 
@@ -61,6 +63,8 @@ export function useSpeechToText(onFinalTranscript: (text: string) => void) {
   const startListening = useCallback((langCode: string = 'si-LK') => {
     setErrorMessage(null);
     setInterimText('');
+    isExplicitListeningRef.current = true;
+    activeLangRef.current = langCode;
 
     const SpeechRecognitionClass =
       (window as unknown as { SpeechRecognition?: SpeechRecognitionConstructor; webkitSpeechRecognition?: SpeechRecognitionConstructor })
@@ -69,7 +73,8 @@ export function useSpeechToText(onFinalTranscript: (text: string) => void) {
 
     if (!SpeechRecognitionClass) {
       setHasSupport(false);
-      setErrorMessage('ඔබගේ Browser එක තුළ Speech Recognition සහාය නොදක්වයි. (Chrome හෝ Edge භාවිත කරන්න)');
+      isExplicitListeningRef.current = false;
+      setErrorMessage('ඔබගේ Browser එක තුළ Speech Recognition සහාය නොදක්වයි. (Google Chrome හෝ Edge භාවිත කරන්න)');
       return;
     }
 
@@ -102,6 +107,7 @@ export function useSpeechToText(onFinalTranscript: (text: string) => void) {
       };
 
       recognition.onerror = (event: Event & { error?: string }) => {
+        // Pauses between words/sentences in Chrome trigger 'no-speech'
         if (event.error === 'no-speech') return;
         
         const isIOS =
@@ -110,6 +116,7 @@ export function useSpeechToText(onFinalTranscript: (text: string) => void) {
             (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
         if (event.error === 'service-not-allowed') {
+          isExplicitListeningRef.current = false;
           if (isIOS) {
             setErrorMessage(
               'Apple iOS (iPhone/iPad) හි Safari මඟින් සිංහල Speech Recognition සහාය නොදක්වයි. කරුණාකර ඔබගේ iPhone හි Helakuru හෝ Gboard keyboard එකේ ඇති Mic (🎙️) බටනය මඟින් Input කොටස තුළට හඬින් Type කරන්න.'
@@ -120,6 +127,7 @@ export function useSpeechToText(onFinalTranscript: (text: string) => void) {
             );
           }
         } else if (event.error === 'not-allowed') {
+          isExplicitListeningRef.current = false;
           if (isIOS) {
             setErrorMessage(
               'Microphone හෝ Speech Recognition අවසරය ලබාදී නොමැත. කරුණාකර iPhone Settings > Safari > Microphone "Allow" කර Settings > General > Keyboard > "Enable Dictation" On කරන්න.'
@@ -128,30 +136,55 @@ export function useSpeechToText(onFinalTranscript: (text: string) => void) {
             setErrorMessage('Microphone අවසරය (Permission) ලබාදී නොමැත.');
           }
         } else if (event.error === 'language-not-supported') {
+          isExplicitListeningRef.current = false;
           setErrorMessage(
             'මෙම බ්‍රවුසරය මඟින් සිංහල (si-LK) හඬ හඳුනාගැනීම සහාය නොදක්වයි. කරුණාකර Google Chrome හෝ Helakuru Keyboard භාවිත කරන්න.'
           );
         } else {
+          // Temporary network or audio glitches should not cancel listening unless fatal
+          if (event.error === 'audio-capture' || event.error === 'network') {
+            return;
+          }
+          isExplicitListeningRef.current = false;
           setErrorMessage(`හඬ හඳුනාගැනීමේ දෝෂයකි: ${event.error || 'Unknown error'}`);
         }
         setIsListening(false);
       };
 
       recognition.onend = () => {
-        setIsListening(false);
-        setInterimText('');
+        // If the user did not click STOP, keep continuous listening running seamlessly across speech pauses!
+        if (isExplicitListeningRef.current) {
+          try {
+            recognition.start();
+          } catch {
+            setTimeout(() => {
+              if (isExplicitListeningRef.current) {
+                try {
+                  recognition.start();
+                } catch {
+                  // ignore if already starting
+                }
+              }
+            }, 100);
+          }
+        } else {
+          setIsListening(false);
+          setInterimText('');
+        }
       };
 
       recognitionRef.current = recognition;
       recognition.start();
     } catch (err) {
       console.error('Speech recognition start failed:', err);
+      isExplicitListeningRef.current = false;
       setIsListening(false);
       setErrorMessage('හඬ හඳුනාගැනීම ආරම්භ කිරීමට නොහැකි විය.');
     }
   }, []);
 
   const stopListening = useCallback(() => {
+    isExplicitListeningRef.current = false;
     if (recognitionRef.current) {
       recognitionRef.current.stop();
     }

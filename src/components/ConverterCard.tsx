@@ -40,6 +40,7 @@ export const ConverterCard: React.FC<ConverterCardProps> = ({ lang }) => {
   const [inputText, setInputText] = useState<string>('');
   const [outputText, setOutputText] = useState<string>('');
   const [copied, setCopied] = useState<boolean>(false);
+  const [copiedInput, setCopiedInput] = useState<boolean>(false);
   const [downloadMenuOpen, setDownloadMenuOpen] = useState<boolean>(false);
   const [isSinglishGuideOpen, setIsSinglishGuideOpen] = useState<boolean>(false);
   
@@ -98,6 +99,25 @@ export const ConverterCard: React.FC<ConverterCardProps> = ({ lang }) => {
     }
   };
 
+  // Copy input (Unicode text)
+  const handleCopyInput = async () => {
+    if (!inputText) return;
+    try {
+      await navigator.clipboard.writeText(inputText);
+      setCopiedInput(true);
+      setTimeout(() => setCopiedInput(false), 2000);
+    } catch {
+      const textArea = document.createElement('textarea');
+      textArea.value = inputText;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setCopiedInput(true);
+      setTimeout(() => setCopiedInput(false), 2000);
+    }
+  };
+
   // Paste into input
   const handlePaste = async () => {
     try {
@@ -116,8 +136,8 @@ export const ConverterCard: React.FC<ConverterCardProps> = ({ lang }) => {
 
   // Swap input & output and toggle mode
   const handleSwap = () => {
-    if (direction === 'singlish_to_unicode') {
-      setDirection('unicode_to_legacy');
+    if (direction === 'singlish_to_unicode' || direction === 'voice_to_unicode') {
+      setDirection('legacy_to_unicode');
       setInputText(outputText);
       return;
     }
@@ -149,10 +169,10 @@ export const ConverterCard: React.FC<ConverterCardProps> = ({ lang }) => {
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 mb-6">
         {/* Mode Switcher Tabs */}
         <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex p-1.5 rounded-2xl bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 shadow-sm">
+          <div className="inline-flex p-1.5 rounded-2xl bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 shadow-sm flex-wrap gap-1">
             <button
               onClick={() => setDirection('unicode_to_legacy')}
-              className={`px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+              className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
                 direction === 'unicode_to_legacy'
                   ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
                   : 'text-slate-800 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-white'
@@ -162,7 +182,7 @@ export const ConverterCard: React.FC<ConverterCardProps> = ({ lang }) => {
             </button>
             <button
               onClick={() => setDirection('legacy_to_unicode')}
-              className={`px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+              className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
                 direction === 'legacy_to_unicode'
                   ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
                   : 'text-slate-800 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-white'
@@ -172,13 +192,29 @@ export const ConverterCard: React.FC<ConverterCardProps> = ({ lang }) => {
             </button>
             <button
               onClick={() => setDirection('singlish_to_unicode')}
-              className={`px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+              className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
                 direction === 'singlish_to_unicode'
                   ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
                   : 'text-slate-800 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-white'
               }`}
             >
               {t.modeSinglishToUnicode}
+            </button>
+            <button
+              onClick={() => {
+                setDirection('voice_to_unicode');
+                if (!isListening) {
+                  startListening('si-LK');
+                }
+              }}
+              className={`flex items-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+                direction === 'voice_to_unicode'
+                  ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30'
+                  : 'text-slate-800 dark:text-slate-200 hover:text-rose-600 dark:hover:text-white'
+              }`}
+            >
+              <Mic className={`w-3.5 h-3.5 ${isListening && direction === 'voice_to_unicode' ? 'animate-bounce text-white' : 'text-rose-500'}`} />
+              <span>{t.modeVoiceToUnicode}</span>
             </button>
           </div>
 
@@ -250,7 +286,9 @@ export const ConverterCard: React.FC<ConverterCardProps> = ({ lang }) => {
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-emerald-500 shadow-sm"></span>
               <h2 className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-slate-100 tracking-wide">
-                {direction === 'unicode_to_legacy'
+                {direction === 'voice_to_unicode'
+                  ? t.inputHeadingVoice
+                  : direction === 'unicode_to_legacy'
                   ? t.inputHeadingUnicode
                   : direction === 'legacy_to_unicode'
                   ? t.inputHeadingLegacy
@@ -260,14 +298,32 @@ export const ConverterCard: React.FC<ConverterCardProps> = ({ lang }) => {
 
             {/* Quick Actions */}
             <div className="flex items-center gap-2">
+              {/* Copy Unicode button if input is Unicode */}
+              {(direction === 'unicode_to_legacy' || direction === 'voice_to_unicode') && inputText && (
+                <button
+                  onClick={handleCopyInput}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-emerald-800 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition shadow-sm"
+                  title={lang === 'si' ? 'යුනිකෝඩ් පිටපත් කරන්න (Copy Unicode)' : 'Copy Unicode text'}
+                >
+                  {copiedInput ? (
+                    <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  ) : (
+                    <Copy className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  )}
+                  <span>{copiedInput ? t.copiedInput : t.copyInputUnicode}</span>
+                </button>
+              )}
+
               {/* Voice Typing Button */}
               <button
                 onClick={() => {
                   if (isListening) {
                     stopListening();
                   } else {
-                    const langCode = direction === 'singlish_to_unicode' ? 'en-US' : 'si-LK';
-                    startListening(langCode);
+                    if (direction === 'singlish_to_unicode') {
+                      setDirection('voice_to_unicode');
+                    }
+                    startListening('si-LK');
                   }
                 }}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-sm ${
@@ -314,13 +370,26 @@ export const ConverterCard: React.FC<ConverterCardProps> = ({ lang }) => {
             <div className="mx-4 mt-3 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/60 border-2 border-rose-300 dark:border-rose-800 text-xs flex flex-wrap items-center justify-between gap-2 shadow-sm animate-in fade-in">
               <div className="flex items-center gap-2 text-rose-800 dark:text-rose-200 font-extrabold">
                 <span className="w-2.5 h-2.5 rounded-full bg-rose-600 animate-ping"></span>
-                <span>{lang === 'si' ? 'සිංහලෙන් කථා කරන්න (Speak in Sinhala)...' : 'Listening (Speak now)...'}</span>
+                <span>
+                  {lang === 'si'
+                    ? '🔴 අඛණ්ඩව සවන් දෙමින් පවතී (ඕනෑම කථාවක් හෝ ලිපියක් නොනවත්වා කථා කරන්න - වචන අතර නැවතුනද Mic ක්‍රියාවිරහිත නොවේ)...'
+                    : '🔴 Listening continuously (dictate freely - mic will not turn off across pauses)...'}
+                </span>
               </div>
               {interimText && (
                 <span className="italic text-slate-800 dark:text-slate-200 font-bold bg-white dark:bg-slate-900 px-2 py-0.5 rounded border border-rose-200">
                   "{interimText}"
                 </span>
               )}
+            </div>
+          )}
+
+          {/* Dedicated Voice to Unicode Mode Guidance Banner */}
+          {direction === 'voice_to_unicode' && !isListening && (
+            <div className="mx-4 mt-3 p-3 rounded-xl bg-rose-50/70 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-xs flex flex-wrap items-center justify-between gap-2 shadow-sm">
+              <span className="text-slate-800 dark:text-slate-200 font-medium">
+                🎙️ <strong>සිංහල හඬින් යුනිකේත ටයිප් කිරීම:</strong> ඕනෑම කථාවක්, දේශනයක් හෝ ලිපියක් අඛණ්ඩව කථා කර Type කරගන්න. අවශ්‍ය විට <strong>යුනිකෝඩ් Copy</strong> හෝ දකුණුපසින් <strong>FM Font Copy</strong> කරගත හැක.
+              </span>
             </div>
           )}
 
@@ -375,7 +444,9 @@ export const ConverterCard: React.FC<ConverterCardProps> = ({ lang }) => {
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               placeholder={
-                direction === 'unicode_to_legacy'
+                direction === 'voice_to_unicode'
+                  ? t.inputPlaceholderVoice
+                  : direction === 'unicode_to_legacy'
                   ? t.inputPlaceholderUnicode
                   : direction === 'legacy_to_unicode'
                   ? t.inputPlaceholderLegacy
