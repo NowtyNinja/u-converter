@@ -103,8 +103,34 @@ export function useSpeechToText(onFinalTranscript: (text: string) => void) {
 
       recognition.onerror = (event: Event & { error?: string }) => {
         if (event.error === 'no-speech') return;
-        if (event.error === 'not-allowed') {
-          setErrorMessage('Microphone අවසරය (Permission) ලබාදී නොමැත.');
+        
+        const isIOS =
+          typeof navigator !== 'undefined' &&
+          (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+            (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+
+        if (event.error === 'service-not-allowed') {
+          if (isIOS) {
+            setErrorMessage(
+              'Apple iOS (iPhone/iPad) හි Safari මඟින් සිංහල Speech Recognition සහාය නොදක්වයි. කරුණාකර ඔබගේ iPhone හි Helakuru හෝ Gboard keyboard එකේ ඇති Mic (🎙️) බටනය මඟින් Input කොටස තුළට හඬින් Type කරන්න.'
+            );
+          } else {
+            setErrorMessage(
+              'Speech සේවාව වෙත ප්‍රවේශ වීමට අවසර නැත (service-not-allowed). කරුණාකර Browser permissions හා Dictation සැකසුම් පරීක්ෂා කරන්න.'
+            );
+          }
+        } else if (event.error === 'not-allowed') {
+          if (isIOS) {
+            setErrorMessage(
+              'Microphone හෝ Speech Recognition අවසරය ලබාදී නොමැත. කරුණාකර iPhone Settings > Safari > Microphone "Allow" කර Settings > General > Keyboard > "Enable Dictation" On කරන්න.'
+            );
+          } else {
+            setErrorMessage('Microphone අවසරය (Permission) ලබාදී නොමැත.');
+          }
+        } else if (event.error === 'language-not-supported') {
+          setErrorMessage(
+            'මෙම බ්‍රවුසරය මඟින් සිංහල (si-LK) හඬ හඳුනාගැනීම සහාය නොදක්වයි. කරුණාකර Google Chrome හෝ Helakuru Keyboard භාවිත කරන්න.'
+          );
         } else {
           setErrorMessage(`හඬ හඳුනාගැනීමේ දෝෂයකි: ${event.error || 'Unknown error'}`);
         }
@@ -141,11 +167,16 @@ export function useSpeechToText(onFinalTranscript: (text: string) => void) {
     };
   }, []);
 
+  const clearError = useCallback(() => {
+    setErrorMessage(null);
+  }, []);
+
   return {
     isListening,
     interimText,
     hasSupport,
     errorMessage,
+    clearError,
     startListening,
     stopListening,
   };

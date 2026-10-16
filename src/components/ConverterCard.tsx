@@ -15,7 +15,8 @@ import {
   BookOpen,
   Lightbulb,
   Mic,
-  MicOff
+  MicOff,
+  X
 } from 'lucide-react';
 import {
   ConversionDirection,
@@ -54,6 +55,7 @@ export const ConverterCard: React.FC<ConverterCardProps> = ({ lang }) => {
     isListening,
     interimText,
     errorMessage: speechError,
+    clearError,
     startListening,
     stopListening,
   } = useSpeechToText(handleVoiceTranscript);
@@ -324,8 +326,23 @@ export const ConverterCard: React.FC<ConverterCardProps> = ({ lang }) => {
 
           {/* Speech Error Banner */}
           {speechError && (
-            <div className="mx-4 mt-3 p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-200 font-medium">
-              ⚠️ {speechError}
+            <div className="mx-4 mt-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 text-xs text-amber-950 dark:text-amber-200 flex items-start justify-between gap-3 shadow-sm animate-in fade-in">
+              <div className="flex items-start gap-2.5">
+                <span className="text-base leading-none">⚠️</span>
+                <div className="space-y-1">
+                  <p className="font-bold leading-relaxed">{speechError}</p>
+                  <p className="text-[11px] text-amber-800 dark:text-amber-300 font-medium leading-relaxed">
+                    💡 <strong>iPhone / iOS සඳහා උපදෙස:</strong> Input කොටස මත Tap කර ඔබගේ <strong>Helakuru</strong> හෝ <strong>Gboard</strong> Keyboard එකෙහි ඇති <strong>Mic (🎙️) බටනය</strong> ඔබා සිංහලෙන් කථා කරන්න. එවිට හඬින් කෙලින්ම Type වී 0ms කින් Legacy Fonts වලට Convert වේ!
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={clearError}
+                className="p-1 rounded-lg text-amber-700 hover:text-amber-900 dark:text-amber-300 hover:bg-amber-200/60 dark:hover:bg-amber-900/60 transition flex-shrink-0"
+                title="Dismiss"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
           )}
 
