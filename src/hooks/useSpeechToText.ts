@@ -46,6 +46,8 @@ export function useSpeechToText(onFinalTranscript: (text: string) => void) {
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const isExplicitListeningRef = useRef<boolean>(false);
   const activeLangRef = useRef<string>('si-LK');
+  const interimRef = useRef<string>('');
+  const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onFinalTranscriptRef = useRef(onFinalTranscript);
   onFinalTranscriptRef.current = onFinalTranscript;
 
@@ -60,11 +62,29 @@ export function useSpeechToText(onFinalTranscript: (text: string) => void) {
     }
   }, []);
 
-  const startListening = useCallback((langCode: string = 'si-LK') => {
-    setErrorMessage(null);
-    setInterimText('');
-    isExplicitListeningRef.current = true;
-    activeLangRef.current = langCode;
+  const cleanupCurrentRecognition = () => {
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = null;
+    }
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.onstart = null;
+        recognitionRef.current.onresult = null;
+        recognitionRef.current.onerror = null;
+        recognitionRef.current.onend = null;
+        recognitionRef.current.abort();
+      } catch {
+        // ignore
+      }
+      recognitionRef.current = null;
+    }
+  };
+
+  const createAndStartInstance = useCallback((langCode: string) => {
+    if (!isExplicitListeningRef.current) return;
+
+    cleanupCurrentRecognition();
 
     const SpeechRecognitionClass =
       (window as unknown as { SpeechRecognition?: SpeechRecognitionConstructor; webkitSpeechRecognition?: SpeechRecognitionConstructor })
@@ -73,16 +93,13 @@ export function useSpeechToText(onFinalTranscript: (text: string) => void) {
 
     if (!SpeechRecognitionClass) {
       setHasSupport(false);
+      setIsListening(false);
       isExplicitListeningRef.current = false;
       setErrorMessage('ඔබගේ Browser එක තුළ Speech Recognition සහාය නොදක්වයි. (Google Chrome හෝ Edge භාවිත කරන්න)');
       return;
     }
 
     try {
-      if (recognitionRef.current) {
-        recognitionRef.current.abort();
-      }
-
       const recognition = new SpeechRecognitionClass();
       recognition.continuous = true;
       recognition.interimResults = true;
@@ -99,17 +116,20 @@ export function useSpeechToText(onFinalTranscript: (text: string) => void) {
           const transcript = result[0].transcript;
           if (result.isFinal) {
             onFinalTranscriptRef.current(transcript.trim());
+            interimRef.current = '';
           } else {
             currentInterim += transcript;
           }
         }
+        interimRef.current = currentInterim;
         setInterimText(currentInterim);
       };
 
       recognition.onerror = (event: Event & { error?: string }) => {
-        // Pauses between words/sentences in Chrome trigger 'no-speech'
+        // Natural speech pauses
         if (event.error === 'no-speech') return;
-        
+        if (event.error === 'audio-capture' || event.error === 'network') return;
+
         const isIOS =
           typeof navigator !== 'undefined' &&
           (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
@@ -117,6 +137,7 @@ export function useSpeechToText(onFinalTranscript: (text: string) => void) {
 
         if (event.error === 'service-not-allowed') {
           isExplicitListeningRef.current = false;
+          setIsListening(false);
           if (isIOS) {
             setErrorMessage(
               'Apple iOS (iPhone/iPad) හි Safari මඟින් සිංහල Speech Recognition සහාය නොදක්වයි. කරුණාකර ඔබගේ iPhone හි Helakuru හෝ Gboard keyboard එකේ ඇති Mic (🎙️) බටනය මඟින් Input කොටස තුළට හඬින් Type කරන්න.'
@@ -128,6 +149,7 @@ export function useSpeechToText(onFinalTranscript: (text: string) => void) {
           }
         } else if (event.error === 'not-allowed') {
           isExplicitListeningRef.current = false;
+          setIsListening(false);
           if (isIOS) {
             setErrorMessage(
               'Microphone හෝ Speech Recognition අවසරය ලබාදී නොමැත. කරුණාකර iPhone Settings > Safari > Microphone "Allow" කර Settings > General > Keyboard > "Enable Dictation" On කරන්න.'
@@ -137,39 +159,35 @@ export function useSpeechToText(onFinalTranscript: (text: string) => void) {
           }
         } else if (event.error === 'language-not-supported') {
           isExplicitListeningRef.current = false;
+          setIsListening(false);
           setErrorMessage(
             'මෙම බ්‍රවුසරය මඟින් සිංහල (si-LK) හඬ හඳුනාගැනීම සහාය නොදක්වයි. කරුණාකර Google Chrome හෝ Helakuru Keyboard භාවිත කරන්න.'
           );
         } else {
-          // Temporary network or audio glitches should not cancel listening unless fatal
-          if (event.error === 'audio-capture' || event.error === 'network') {
-            return;
-          }
           isExplicitListeningRef.current = false;
+          setIsListening(false);
           setErrorMessage(`හඬ හඳුනාගැනීමේ දෝෂයකි: ${event.error || 'Unknown error'}`);
         }
-        setIsListening(false);
       };
 
       recognition.onend = () => {
-        // If the user did not click STOP, keep continuous listening running seamlessly across speech pauses!
+        // 1. Flush any leftover interim words so nothing is lost
+        if (interimRef.current && interimRef.current.trim().length > 0) {
+          onFinalTranscriptRef.current(interimRef.current.trim());
+          interimRef.current = '';
+        }
+        setInterimText('');
+
+        // 2. If user is still listening, cleanly create a fresh instance after 200ms
         if (isExplicitListeningRef.current) {
-          try {
-            recognition.start();
-          } catch {
-            setTimeout(() => {
-              if (isExplicitListeningRef.current) {
-                try {
-                  recognition.start();
-                } catch {
-                  // ignore if already starting
-                }
-              }
-            }, 100);
-          }
+          if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+          restartTimerRef.current = setTimeout(() => {
+            if (isExplicitListeningRef.current) {
+              createAndStartInstance(activeLangRef.current);
+            }
+          }, 200);
         } else {
           setIsListening(false);
-          setInterimText('');
         }
       };
 
@@ -183,20 +201,35 @@ export function useSpeechToText(onFinalTranscript: (text: string) => void) {
     }
   }, []);
 
+  const startListening = useCallback((langCode: string = 'si-LK') => {
+    setErrorMessage(null);
+    setInterimText('');
+    interimRef.current = '';
+    isExplicitListeningRef.current = true;
+    activeLangRef.current = langCode;
+    createAndStartInstance(langCode);
+  }, [createAndStartInstance]);
+
   const stopListening = useCallback(() => {
     isExplicitListeningRef.current = false;
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = null;
     }
+    // Flush any leftover interim words
+    if (interimRef.current && interimRef.current.trim().length > 0) {
+      onFinalTranscriptRef.current(interimRef.current.trim());
+      interimRef.current = '';
+    }
+    cleanupCurrentRecognition();
     setIsListening(false);
     setInterimText('');
   }, []);
 
   useEffect(() => {
     return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.abort();
-      }
+      isExplicitListeningRef.current = false;
+      cleanupCurrentRecognition();
     };
   }, []);
 

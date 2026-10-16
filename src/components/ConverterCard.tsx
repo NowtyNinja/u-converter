@@ -49,7 +49,13 @@ export const ConverterCard: React.FC<ConverterCardProps> = ({ lang }) => {
 
   // Speech-to-Text Voice Typing integration
   const handleVoiceTranscript = (transcript: string) => {
-    setInputText((prev) => (prev ? prev + ' ' + transcript : transcript));
+    const clean = transcript.trim();
+    if (!clean) return;
+    setInputText((prev) => {
+      if (!prev) return clean;
+      const separator = prev.endsWith(' ') || prev.endsWith('\n') ? '' : ' ';
+      return prev + separator + clean;
+    });
   };
 
   const {
@@ -201,12 +207,7 @@ export const ConverterCard: React.FC<ConverterCardProps> = ({ lang }) => {
               {t.modeSinglishToUnicode}
             </button>
             <button
-              onClick={() => {
-                setDirection('voice_to_unicode');
-                if (!isListening) {
-                  startListening('si-LK');
-                }
-              }}
+              onClick={() => setDirection('voice_to_unicode')}
               className={`flex items-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
                 direction === 'voice_to_unicode'
                   ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30'
@@ -386,10 +387,21 @@ export const ConverterCard: React.FC<ConverterCardProps> = ({ lang }) => {
 
           {/* Dedicated Voice to Unicode Mode Guidance Banner */}
           {direction === 'voice_to_unicode' && !isListening && (
-            <div className="mx-4 mt-3 p-3 rounded-xl bg-rose-50/70 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-xs flex flex-wrap items-center justify-between gap-2 shadow-sm">
-              <span className="text-slate-800 dark:text-slate-200 font-medium">
-                🎙️ <strong>සිංහල හඬින් යුනිකේත ටයිප් කිරීම:</strong> ඕනෑම කථාවක්, දේශනයක් හෝ ලිපියක් අඛණ්ඩව කථා කර Type කරගන්න. අවශ්‍ය විට <strong>යුනිකෝඩ් Copy</strong> හෝ දකුණුපසින් <strong>FM Font Copy</strong> කරගත හැක.
-              </span>
+            <div className="mx-4 mt-3 p-3.5 rounded-xl bg-rose-50/80 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-xs flex flex-col gap-2 shadow-sm">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-slate-900 dark:text-slate-100 font-extrabold text-xs sm:text-sm flex items-center gap-1.5">
+                  <Mic className="w-4 h-4 text-rose-600" />
+                  <span>{lang === 'si' ? 'අඛණ්ඩ සිංහල හඬින් යුනිකේත ටයිප් කිරීම' : 'Continuous Sinhala Voice Typing'}</span>
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-bold text-[10px]">
+                  {lang === 'si' ? 'Non-Stop Auto Restart' : 'Non-Stop Active'}
+                </span>
+              </div>
+              <p className="text-slate-700 dark:text-slate-300 leading-relaxed text-[11px]">
+                💡 <strong>වැඩිම නිරවද්‍යතාවයක් (Accuracy) ලබාගැනීමට උපදෙස්:</strong>
+                <br />• <strong>ස්වාභාවික විරාමය:</strong> එක් එක් වාක්‍යයක් අවසානයේ හුස්මක් ගෙන තත්පර 1ක ස්වාභාවික විරාමයක් තබන්න (එවිට AI එකට වචන 100%ක් නිවැරදිව Finalize කිරීමට හැකිවේ).
+                <br />• <strong>පැහැදිලි ශබ්දය:</strong> මයික්‍රෆෝනයට සෙන්ටිමීටර් 15-20ක් පමණ ළංවී පසුබිම් ඝෝෂාව අවම පරිසරයක කථා කරන්න.
+              </p>
             </div>
           )}
 
